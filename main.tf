@@ -147,4 +147,4 @@ resource "aws_instance" "main" {
     Environment = var.environment
     ManagedBy   = "Terraform"
   }
-} 
+}  

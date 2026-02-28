@@ -9,7 +9,7 @@ on:
 jobs:
   terraform:
     name: Terraform Deploy
-    runs-on: [self-hosted, ip-172-31-1-166]  # ensure the self-hosted runner with this label picks up
+    runs-on: self-hosted
 
     steps:
       - name: Checkout Code

@@ -1,33 +1,10 @@
-{
-  "version": 4,
-  "terraform_version": "1.14.6",
-  "serial": 4,
-  "lineage": "4a9943d6-880e-4560-e4b8-338cef93a663",
-  "outputs": {
-    "ami_used": {
-      "value": "ami-0199fa5fada510433",
-      "type": "string"
-    },
-    "instance_id": {
-      "value": "i-050a3791d3c27b75d",
-      "type": "string"
-    },
-    "private_ip": {
-      "value": "172.31.16.221",
-      "type": "string"
-    },
-    "public_ip": {
-      "value": "54.90.122.183",
-      "type": "string"
-    },
-    "ssh_command": {
-      "value": "ssh -i ~/.ssh/id_rsa ec2-user@54.90.122.183",
-      "type": "string"
-    }
-  },
-  "resources": [
-    {
-      "mode": "data",
+aws_region = "us-east-1"
+instance_name = "my-server"
+instance_type = "t2.micro"
+root_volume_size = 20
+environment = "dev"
+ssh_allowed_cidr = "0.0.0.0/0"
+public_key_path = "~/.ssh/id_rsa.pub"
       "type": "aws_ami",
       "name": "amazon_linux",
       "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",

@@ -36,6 +36,20 @@ jobs:
             echo "unzip already installed"
           fi
 
+      - name: Install Node.js (if missing)
+        run: |
+          if ! command -v node >/dev/null; then
+            echo "node not found, attempting to install Node.js (LTS)..."
+            if sudo -n true 2>/dev/null; then
+              curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+              sudo apt-get install -y nodejs
+            else
+              echo "No sudo access; please install Node.js on the self-hosted runner and re-run the job"
+            fi
+          else
+            echo "node already installed: $(node --version)"
+          fi
+
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v2
         with:

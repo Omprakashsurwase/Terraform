@@ -1,4 +1,4 @@
-name: Terraform CI
+name: Terraform Deploy
 
 on:
   push:
@@ -8,60 +8,47 @@ on:
 
 jobs:
   terraform:
-    name: Terraform Deploy
+    name: Deploy Infrastructure
     runs-on: self-hosted
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    - name: Checkout Code
+      uses: actions/checkout@v4
 
-      - name: Show repo files
-        run: |
-          echo "Workspace: $GITHUB_WORKSPACE"
-          pwd
-          ls -la
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: "latest"
 
-      - name: Ensure unzip is available on runner
-        run: |
-          if ! command -v unzip >/dev/null; then
-            echo "unzip not found, attempting to install..."
-            if sudo -n true 2>/dev/null; then
-              sudo apt-get update && sudo apt-get install -y unzip
-            else
-              echo "No sudo access; please install 'unzip' on the self-hosted runner and re-run the job"
-            fi
-          else
-            echo "unzip already installed"
-          fi
+    # ============================================
+    # CLEANUP - Delete existing resources to avoid
+    # duplicate errors on re-runs
+    # ============================================
+    - name: Cleanup existing AWS resources
+      run: |
+        echo "Deleting existing key pair if exists..."
+        aws ec2 delete-key-pair --key-name my-server-key 2>/dev/null || echo "Key pair not found, skipping..."
 
-      - name: Install Node.js (if missing)
-        run: |
-          if ! command -v node >/dev/null; then
-            echo "node not found, attempting to install Node.js (LTS)..."
-            if sudo -n true 2>/dev/null; then
-              curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
-              sudo apt-get install -y nodejs
-            else
-              echo "No sudo access; please install Node.js on the self-hosted runner and re-run the job"
-            fi
-          else
-            echo "node already installed: $(node --version)"
-          fi
+        echo "Getting security group ID..."
+        SG_ID=$(aws ec2 describe-security-groups \
+          --filters "Name=group-name,Values=my-server-sg" \
+          --query "SecurityGroups[0].GroupId" \
+          --output text 2>/dev/null)
 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: "latest"
+        if [ "$SG_ID" != "None" ] && [ -n "$SG_ID" ]; then
+          echo "Deleting security group $SG_ID..."
+          aws ec2 delete-security-group --group-id $SG_ID || echo "Could not delete security group, skipping..."
+        else
+          echo "Security group not found, skipping..."
+        fi
 
-      - name: Terraform Init
-        run: terraform init
+        echo "Cleanup complete!"
 
-      - name: Terraform Plan
-        run: terraform plan
+    - name: Terraform Init
+      run: terraform init
 
-      - name: Terraform Apply
-        run: terraform apply -auto-approve
+    - name: Terraform Plan
+      run: terraform plan
 
-
+    - name: Terraform Apply
+      run: terraform apply -auto-approve

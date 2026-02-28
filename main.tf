@@ -89,12 +89,12 @@ resource "aws_security_group" "ec2_sg" {
 }
 
 # ============================================
-# KEY PAIR (uses your existing public key)
+# KEY PAIR (uses existing public key on runner)
 # ============================================
 
 resource "aws_key_pair" "ec2_key" {
   key_name   = "${var.instance_name}-key"
-  public_key = file(var.public_key_path)
+  public_key = file("/home/ubuntu/.ssh/id_rsa.pub")
 }
 
 # ============================================

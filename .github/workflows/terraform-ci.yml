@@ -9,7 +9,8 @@ on:
 jobs:
   fmt:
     name: Check formatting
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ip-172-31-1-166]
+    # uses your specified self-hosted runner
     steps:
       - uses: actions/checkout@v4
       - name: Set up Terraform
@@ -21,7 +22,7 @@ jobs:
 
   validate:
     name: Validate configuration
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ip-172-31-1-166]
     needs: fmt
     steps:
       - uses: actions/checkout@v4

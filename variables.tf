@@ -63,9 +63,15 @@ variable "ec2_instance_count" {
 }
 
 variable "ec2_key_name" {
-  description = "EC2 Key Pair name for SSH access (existing key in your account)"
-  type        = string
-  default     = "my-key"
+  description = <<EOF
+Name of an existing EC2 key pair to attach to the instance.
+
+If left blank, Terraform will automatically select the first key pair
+returned by the AWS API in the current region. This ensures the plan
+succeeds even when you don't know a key name in advance.
+EOF
+  type    = string
+  default = ""
 }
 
 variable "ec2_root_volume_size" {

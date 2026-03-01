@@ -18,6 +18,6 @@ allowed_ssh_cidrs = ["0.0.0.0/0"]
 ec2_instance_type    = "t2.micro"
 ec2_ami_id           = ""          # leave blank to use latest official Amazon Linux 2
 ec2_instance_count   = 1
-ec2_key_name         = "my-key"
+ec2_key_name         = "devops-key"
 ec2_root_volume_size = 20
 

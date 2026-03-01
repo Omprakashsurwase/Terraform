@@ -18,6 +18,12 @@ data "aws_ami" "amazon_linux" {
   }
 }
 
+data "aws_key_pairs" "all" {}
+
+locals {
+  chosen_key = var.ec2_key_name != "" ? var.ec2_key_name : lookup(data.aws_key_pairs.all.names, 0, "")
+}
+
 # simple vpc
 resource "aws_vpc" "main" {
   cidr_block = var.vpc_cidr
@@ -57,8 +63,15 @@ resource "aws_instance" "app" {
   instance_type          = var.ec2_instance_type
   subnet_id              = element(aws_subnet.public.*.id, 0)
   vpc_security_group_ids = [aws_security_group.instance_sg.id]
-  key_name               = var.ec2_key_name != "" ? var.ec2_key_name : null
+  key_name               = local.chosen_key
   count                  = var.ec2_instance_count
+
+  lifecycle {
+    precondition {
+      condition     = local.chosen_key != ""
+      error_message = "No EC2 key pair found and ec2_key_name was empty. Create a key or supply its name."
+    }
+  }
 
   root_block_device {
     volume_size = var.ec2_root_volume_size

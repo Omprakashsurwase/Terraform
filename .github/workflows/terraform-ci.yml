@@ -42,6 +42,7 @@ jobs:
 
     - name: Terraform Init
       run: terraform init
+      working-directory: ./aws-infra
 
     - name: Terraform Plan
       run: terraform plan

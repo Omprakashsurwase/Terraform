@@ -15,10 +15,6 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v2
-      with:
-        terraform_version: "latest"
 
     # ============================================
     # CLEANUP - Delete existing resources to avoid

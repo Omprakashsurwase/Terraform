@@ -15,6 +15,29 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
+    - name: Prepare modules
+      run: |
+        echo "Locating modules in common paths..."
+        CANDIDATES=(
+          "mnt/user-data/outputs/aws-infra/modules"
+          "./mnt/user-data/outputs/aws-infra/modules"
+          "/home/ubuntu/actions-runner/_work/Terraform/mnt/user-data/outputs/aws-infra/modules"
+          "/home/ubuntu/actions-runner/_work/Terraform/Terraform/mnt/user-data/outputs/aws-infra/modules"
+        )
+        FOUND=0
+        for p in "${CANDIDATES[@]}"; do
+          if [ -d "$p" ]; then
+            echo "Found modules at $p"
+            mkdir -p ./modules
+            cp -r "$p"/* ./modules/ || true
+            FOUND=1
+            break
+          fi
+        done
+        if [ "$FOUND" -eq 0 ]; then
+          echo "No external modules dir found, skipping copy."
+        fi
+
 
     # ============================================
     # CLEANUP - Delete existing resources to avoid

@@ -1,150 +1,146 @@
-# ============================================
-# main.tf - EC2 Instance Creation Template
-# ============================================
+# ============================================================
+# main.tf  — Root Orchestrator
+# To add a new service: uncomment its module block below.
+# Each module only needs the variables in its own folder.
+# ============================================================
 
 terraform {
+  required_version = ">= 1.5.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
   }
-}
 
-# ============================================
-# PROVIDER CONFIGURATION
-# ============================================
+  # Remote state — update bucket/table after bootstrapping
+  backend "s3" {
+    bucket         = "your-tf-state-bucket"          # ← change once
+    key            = "infra/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "terraform-state-lock"
+    encrypt        = true
+  }
+}
 
 provider "aws" {
   region = var.aws_region
-}
 
-# ============================================
-# DATA SOURCE - Fetch Latest Amazon Linux 2 AMI
-# (Automatically picks latest AMI, no hardcoding)
-# ============================================
-
-data "aws_ami" "amazon_linux" {
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
-  }
-
-  filter {
-    name   = "state"
-    values = ["available"]
+  default_tags {
+    tags = {
+      Project     = var.project_name
+      Environment = var.environment
+      ManagedBy   = "Terraform"
+      Owner       = var.owner
+    }
   }
 }
 
-# ============================================
-# SECURITY GROUP
-# ============================================
+# ============================================================
+# MODULE: VPC  (always required — never comment out)
+# ============================================================
+module "vpc" {
+  source = "./modules/vpc"
 
-resource "aws_security_group" "ec2_sg" {
-  name        = "${var.instance_name}-sg"
-  description = "Security group for ${var.instance_name}"
-
-  # Allow SSH
-  ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.ssh_allowed_cidr]
-  }
-
-  # Allow HTTP
-  ingress {
-    description = "HTTP"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # Allow HTTPS
-  ingress {
-    description = "HTTPS"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # Allow all outbound traffic
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name        = "${var.instance_name}-sg"
-    Environment = var.environment
-  }
+  project_name         = var.project_name
+  environment          = var.environment
+  vpc_cidr             = var.vpc_cidr
+  public_subnet_cidrs  = var.public_subnet_cidrs
+  private_subnet_cidrs = var.private_subnet_cidrs
+  availability_zones   = var.availability_zones
 }
 
-# ============================================
-# KEY PAIR (uses existing public key on runner)
-# ============================================
+# ============================================================
+# MODULE: SECURITY GROUPS  (always required)
+# ============================================================
+module "security_groups" {
+  source = "./modules/security-groups"
 
-resource "aws_key_pair" "ec2_key" {
-  key_name   = "${var.instance_name}-key"
-  public_key = file("/home/ubuntu/.ssh/id_rsa.pub")
+  project_name      = var.project_name
+  environment       = var.environment
+  vpc_id            = module.vpc.vpc_id
+  vpc_cidr          = var.vpc_cidr
+  allowed_ssh_cidrs = var.allowed_ssh_cidrs
+  app_port          = var.app_port
 }
 
-# ============================================
-# EC2 INSTANCE
-# ============================================
+# ============================================================
+# MODULE: EC2
+# To add EC2: ensure ec2_enabled = true in your .tfvars
+# ============================================================
+module "ec2" {
+  source = "./modules/ec2"
+  count  = var.ec2_enabled ? 1 : 0
 
-resource "aws_instance" "main" {
-  # AMI - automatically fetched above
-  ami           = data.aws_ami.amazon_linux.id
+  project_name      = var.project_name
+  environment       = var.environment
+  vpc_id            = module.vpc.vpc_id
+  subnet_ids        = module.vpc.public_subnet_ids
+  security_group_id = module.security_groups.app_sg_id
+  instance_type     = var.ec2_instance_type
+  ami_id            = var.ec2_ami_id
+  instance_count    = var.ec2_instance_count
+  key_name          = var.ec2_key_name
+  enable_eip        = var.ec2_enable_eip
+  root_volume_size  = var.ec2_root_volume_size
+  user_data         = var.ec2_user_data
+}
 
-  # Instance type from variable
-  instance_type = var.instance_type
+# ============================================================
+# MODULE: RDS
+# To add RDS: ensure rds_enabled = true in your .tfvars
+# ============================================================
+module "rds" {
+  source = "./modules/rds"
+  count  = var.rds_enabled ? 1 : 0
 
-  # Key pair for SSH access
-  key_name      = aws_key_pair.ec2_key.key_name
+  project_name       = var.project_name
+  environment        = var.environment
+  subnet_ids         = module.vpc.private_subnet_ids
+  security_group_id  = module.security_groups.db_sg_id
+  db_engine          = var.rds_engine
+  db_engine_version  = var.rds_engine_version
+  db_instance_class  = var.rds_instance_class
+  db_name            = var.rds_db_name
+  db_username        = var.rds_username
+  db_password        = var.rds_password
+  allocated_storage  = var.rds_allocated_storage
+  multi_az           = var.rds_multi_az
+  skip_final_snapshot = var.rds_skip_final_snapshot
+}
 
-  # Security group
-  vpc_security_group_ids = [aws_security_group.ec2_sg.id]
+# ============================================================
+# MODULE: S3
+# To add S3: ensure s3_enabled = true in your .tfvars
+# ============================================================
+module "s3" {
+  source = "./modules/s3"
+  count  = var.s3_enabled ? 1 : 0
 
-  # Root volume configuration
-  root_block_device {
-    volume_type           = "gp3"
-    volume_size           = var.root_volume_size
-    delete_on_termination = true
-    encrypted             = true
-  }
+  project_name       = var.project_name
+  environment        = var.environment
+  bucket_name        = var.s3_bucket_name
+  versioning_enabled = var.s3_versioning
+  force_destroy      = var.s3_force_destroy
+  lifecycle_days     = var.s3_lifecycle_days
+}
 
-  # User data script - runs on first boot automatically
-  user_data = <<-EOF
-    #!/bin/bash
-    # Update system
-    yum update -y
+# ============================================================
+# MODULE: ECS
+# To add ECS: ensure ecs_enabled = true in your .tfvars
+# ============================================================
+module "ecs" {
+  source = "./modules/ecs"
+  count  = var.ecs_enabled ? 1 : 0
 
-    # Install common tools
-    yum install -y curl wget git htop
-
-    # Set hostname
-    hostnamectl set-hostname ${var.instance_name}
-
-    # Log startup completion
-    echo "EC2 instance ${var.instance_name} initialized successfully" >> /var/log/user-data.log
-  EOF
-
-  # Enable detailed monitoring
-  monitoring = true
-
-  # Tags
-  tags = {
-    Name        = var.instance_name
-    Environment = var.environment
-    ManagedBy   = "Terraform"
-  }
-}  
+  project_name      = var.project_name
+  environment       = var.environment
+  vpc_id            = module.vpc.vpc_id
+  subnet_ids        = module.vpc.private_subnet_ids
+  security_group_id = module.security_groups.app_sg_id
+  container_image   = var.ecs_container_image
+  container_port    = var.app_port
+  desired_count     = var.ecs_desired_count
+  cpu               = var.ecs_cpu
+  memory            = var.ecs_memory
+}

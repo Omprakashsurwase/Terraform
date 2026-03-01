@@ -15,62 +15,12 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Prepare modules
-      run: |
-        echo "Locating modules in common paths..."
-        CANDIDATES=(
-          "mnt/user-data/outputs/aws-infra/modules"
-          "./mnt/user-data/outputs/aws-infra/modules"
-          "/home/ubuntu/actions-runner/_work/Terraform/mnt/user-data/outputs/aws-infra/modules"
-          "/home/ubuntu/actions-runner/_work/Terraform/Terraform/mnt/user-data/outputs/aws-infra/modules"
-        )
-        FOUND=0
-        for p in "${CANDIDATES[@]}"; do
-          if [ -d "$p" ]; then
-            echo "Found modules at $p"
-            mkdir -p ./modules
-            cp -r "$p"/* ./modules/ || true
-            FOUND=1
-            break
-          fi
-        done
-        if [ "$FOUND" -eq 0 ]; then
-          echo "No external modules dir found, skipping copy."
-        fi
-
-
-    # ============================================
-    # CLEANUP - Delete existing resources to avoid
-    # duplicate errors on re-runs
-    # ============================================
-    - name: Cleanup existing AWS resources
-      run: |
-        echo "Deleting existing key pair if exists..."
-        aws ec2 delete-key-pair --key-name my-server-key 2>/dev/null || echo "Key pair not found, skipping..."
-
-        echo "Getting security group ID..."
-        SG_ID=$(aws ec2 describe-security-groups \
-          --filters "Name=group-name,Values=my-server-sg" \
-          --query "SecurityGroups[0].GroupId" \
-          --output text 2>/dev/null)
-
-        if [ "$SG_ID" != "None" ] && [ -n "$SG_ID" ]; then
-          echo "Deleting security group $SG_ID..."
-          aws ec2 delete-security-group --group-id $SG_ID || echo "Could not delete security group, skipping..."
-        else
-          echo "Security group not found, skipping..."
-        fi
-
-        echo "Cleanup complete!"
 
     - name: Terraform Init
       run: terraform init
-      working-directory: .
 
     - name: Terraform Plan
       run: terraform plan
-      working-directory: .
 
     - name: Terraform Apply
-      run: terraform apply -auto-approve
-      working-directory: . 
+      run: terraform apply -auto-approve 

@@ -1,89 +1,70 @@
-# ============================================================
-# main.tf  — Root Orchestrator
-# To add a new service: uncomment its module block below.
-# Each module only needs the variables in its own folder.
-# ============================================================
-
 terraform {
-  required_version = ">= 1.5.0"
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
+    aws = { source = "hashicorp/aws" }
   }
-
-  # Remote state — update bucket/table after bootstrapping
-  backend "s3" {
-    bucket         = "your-tf-state-bucket"          # ← change once
-    key            = "infra/terraform.tfstate"
-    region         = "us-east-1"
-    dynamodb_table = "terraform-state-lock"
-    encrypt        = true
-  }
+  # state is stored locally by default for this minimal EC2 only setup
 }
 
 provider "aws" {
   region = var.aws_region
+}
 
-  default_tags {
-    tags = {
-      Project     = var.project_name
-      Environment = var.environment
-      ManagedBy   = "Terraform"
-      Owner       = var.owner
-    }
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
   }
 }
 
-# ============================================================
-# MODULE: VPC  (always required — never comment out)
-# ============================================================
-module "vpc" {
-  source = "./modules/vpc"
-
-  project_name         = var.project_name
-  environment          = var.environment
-  vpc_cidr             = var.vpc_cidr
-  public_subnet_cidrs  = var.public_subnet_cidrs
-  private_subnet_cidrs = var.private_subnet_cidrs
-  availability_zones   = var.availability_zones
+# simple vpc
+resource "aws_vpc" "main" {
+  cidr_block = var.vpc_cidr
+  tags = { Name = "${var.project_name}-${var.environment}-vpc" }
 }
 
-# ============================================================
-# MODULE: SECURITY GROUPS  (always required)
-# ============================================================
-module "security_groups" {
-  source = "./modules/security-groups"
-
-  project_name      = var.project_name
-  environment       = var.environment
-  vpc_id            = module.vpc.vpc_id
-  vpc_cidr          = var.vpc_cidr
-  allowed_ssh_cidrs = var.allowed_ssh_cidrs
-  app_port          = var.app_port
+resource "aws_subnet" "public" {
+  count                   = length(var.public_subnet_cidrs)
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.public_subnet_cidrs[count.index]
+  availability_zone       = var.availability_zones[count.index]
+  map_public_ip_on_launch = true
 }
 
-# ============================================================
-# MODULE: EC2
-# To add EC2: ensure ec2_enabled = true in your .tfvars
-# ============================================================
-module "ec2" {
-  source = "./modules/ec2"
-  count  = var.ec2_enabled ? 1 : 0
+resource "aws_security_group" "instance_sg" {
+  name        = "${var.project_name}-${var.environment}-sg"
+  description = "Allow SSH"
+  vpc_id      = aws_vpc.main.id
 
-  project_name      = var.project_name
-  environment       = var.environment
-  vpc_id            = module.vpc.vpc_id
-  subnet_ids        = module.vpc.public_subnet_ids
-  security_group_id = module.security_groups.app_sg_id
-  instance_type     = var.ec2_instance_type
-  ami_id            = var.ec2_ami_id
-  instance_count    = var.ec2_instance_count
-  key_name          = var.ec2_key_name
-  enable_eip        = var.ec2_enable_eip
-  root_volume_size  = var.ec2_root_volume_size
-  user_data         = var.ec2_user_data
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_ssh_cidrs
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_instance" "app" {
+  ami = var.ec2_ami_id != "" ? var.ec2_ami_id : data.aws_ami.amazon_linux.id
+  instance_type          = var.ec2_instance_type
+  subnet_id              = element(aws_subnet.public.*.id, 0)
+  vpc_security_group_ids = [aws_security_group.instance_sg.id]
+  key_name               = var.ec2_key_name != "" ? var.ec2_key_name : null
+  count                  = var.ec2_instance_count
+
+  root_block_device {
+    volume_size = var.ec2_root_volume_size
+  }
+
+  tags = { Name = "${var.project_name}-${var.environment}-ec2" }
 }
 
 # ============================================================

@@ -5,9 +5,6 @@
 # needs to change in this file's existing content.
 # ============================================================
 
-# -------------------------------------------------------
-# GLOBAL
-# -------------------------------------------------------
 variable "project_name" {
   description = "Project name — used as prefix in all resource names"
   type        = string
@@ -28,15 +25,6 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
-variable "owner" {
-  description = "Team or person owning this infrastructure"
-  type        = string
-  default     = "platform-team"
-}
-
-# -------------------------------------------------------
-# NETWORKING
-# -------------------------------------------------------
 variable "vpc_cidr" {
   type    = string
   default = "10.0.0.0/16"
@@ -47,49 +35,26 @@ variable "public_subnet_cidrs" {
   default = ["10.0.1.0/24", "10.0.2.0/24"]
 }
 
-variable "private_subnet_cidrs" {
-  type    = list(string)
-  default = ["10.0.10.0/24", "10.0.11.0/24"]
-}
-
 variable "availability_zones" {
   type    = list(string)
   default = ["us-east-1a", "us-east-1b"]
 }
 
-# -------------------------------------------------------
-# SECURITY GROUPS
-# -------------------------------------------------------
 variable "allowed_ssh_cidrs" {
   description = "IPs allowed to SSH. Restrict in prod!"
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }
 
-variable "app_port" {
-  description = "Application port (used in SG + ECS)"
-  type        = number
-  default     = 8080
-}
-
-# -------------------------------------------------------
-# EC2  (only used when ec2_enabled = true)
-# -------------------------------------------------------
-variable "ec2_enabled" {
-  description = "Set to true to deploy EC2 instances"
-  type        = bool
-  default     = false
-}
-
 variable "ec2_instance_type" {
   type    = string
-  default = "t3.micro"
+  default = "t2.micro"
 }
 
 variable "ec2_ami_id" {
-  description = "AMI ID — use AWS SSM latest or specify explicitly"
+  description = "AMI ID to use for the instance. Leave blank to use the latest official Amazon Linux 2."
   type        = string
-  default     = "ami-0c02fb55956c7d316"  # Amazon Linux 2 us-east-1
+  default     = ""
 }
 
 variable "ec2_instance_count" {
@@ -98,15 +63,9 @@ variable "ec2_instance_count" {
 }
 
 variable "ec2_key_name" {
-  description = "EC2 Key Pair name for SSH access"
+  description = "EC2 Key Pair name for SSH access (existing key in your account)"
   type        = string
-  default     = ""
-}
-
-variable "ec2_enable_eip" {
-  description = "Attach an Elastic IP to each instance"
-  type        = bool
-  default     = false
+  default     = "my-key"
 }
 
 variable "ec2_root_volume_size" {
